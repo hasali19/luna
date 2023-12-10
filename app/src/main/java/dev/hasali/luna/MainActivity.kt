@@ -33,7 +33,7 @@ private fun App() {
     NavHost(navController = navController, startDestination = "apps_list") {
         composable("apps_list") {
             AppsListPage(
-                onAddApp = { navController.navigate("add_app") }
+                onSearchApps = { navController.navigate("add_app") }
             )
         }
 
