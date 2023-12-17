@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -47,46 +48,17 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import dev.hasali.luna.ui.theme.LunaTheme
-import dev.hasali.luna.ui.theme.Typography
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.observer.ResponseObserver
 import io.ktor.client.request.get
 import io.ktor.client.statement.request
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.launch
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import logcat.logcat
-
-@Serializable
-data class GitHubRepo(
-    val name: String,
-    @SerialName("full_name") val fullName: String,
-    @SerialName("html_url") val htmlUrl: String,
-    val owner: Owner,
-) {
-    @Serializable
-    data class Owner(val login: String, @SerialName("avatar_url") val avatarUrl: String)
-}
-
-@Serializable
-data class GitHubRepoRelease(
-    val id: Int,
-    @SerialName("created_at") val createdAt: String,
-    val assets: List<GitHubRepoReleaseAsset>,
-)
-
-@Serializable
-data class GitHubRepoReleaseAsset(
-    val name: String,
-    val size: Long,
-    @SerialName("browser_download_url") val browserDownloadUrl: String,
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,10 +73,6 @@ fun AddAppPage() {
 
             ResponseObserver {
                 logcat { "method=${it.request.method}, url=${it.request.url}, status=${it.status}" }
-            }
-
-            defaultRequest {
-                url("https://api.github.com")
             }
         }
     }
@@ -127,37 +95,15 @@ fun AddAppPage() {
                     .padding(padding)
                     .padding(16.dp),
             ) {
-                var owner by remember { mutableStateOf("") }
-                var repo by remember { mutableStateOf("") }
-                var repoData: GitHubRepo? by remember { mutableStateOf(null) }
-
-                val formattedOwner = owner.trim().ifBlank { "<user>" }
-                val formattedRepo = repo.trim().ifBlank { "<repo>" }
+                var manifestUrl by remember { mutableStateOf("") }
+                var manifest: AppManifest? by remember { mutableStateOf(null) }
 
                 Column {
-                    Row {
-                        TextField(
-                            modifier = Modifier.weight(1f),
-                            value = owner,
-                            placeholder = { Text("Owner") },
-                            onValueChange = { owner = it },
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        TextField(
-                            modifier = Modifier.weight(1f),
-                            value = repo,
-                            placeholder = { Text("Repo") },
-                            onValueChange = { repo = it },
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "https://github.com/$formattedOwner/$formattedRepo",
-                        style = Typography.bodySmall,
+                    TextField(
+                        modifier = Modifier.fillMaxWidth(),
+                        value = manifestUrl,
+                        placeholder = { Text("Url") },
+                        onValueChange = { manifestUrl = it },
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
@@ -168,11 +114,11 @@ fun AddAppPage() {
                         modifier = Modifier.align(Alignment.CenterHorizontally),
                         onClick = {
                             scope.launch {
-                                val res = client.get("/repos/${owner.trim()}/${repo.trim()}")
+                                val res = client.get(manifestUrl)
                                 if (res.status.isSuccess()) {
-                                    repoData = res.body<GitHubRepo>()
+                                    manifest = res.body<AppManifest>()
                                 } else {
-                                    Toast.makeText(context, "Repo not found", Toast.LENGTH_SHORT)
+                                    Toast.makeText(context, "App not found", Toast.LENGTH_SHORT)
                                         .show()
                                 }
                             }
@@ -191,7 +137,7 @@ fun AddAppPage() {
                         }
                     }
 
-                    repoData?.let { repoData ->
+                    manifest?.let { manifest ->
                         var loading by remember { mutableStateOf(false) }
                         var progress: Float? by remember {
                             mutableStateOf(
@@ -200,55 +146,29 @@ fun AddAppPage() {
                         }
 
                         Spacer(modifier = Modifier.height(32.dp))
-                        RepoDetailsCard(
-                            repo = repoData,
+                        AppDetailsCard(
+                            manifest = manifest,
                             loading = loading,
                             progress = progress,
                             onInstall = {
                                 loading = true
                                 scope.launch {
-                                    val res =
-                                        client.get("/repos/${repoData.owner.login}/${repoData.name}/releases/latest")
-                                    if (!res.status.isSuccess()) {
+                                    val packages = manifest.packages.associateBy { it.abi ?: "any" }
+                                    val abi = Build.SUPPORTED_ABIS.find { packages.containsKey(it) }
+                                        ?: "any"
+                                    val pkg = packages[abi]
+
+                                    if (pkg == null) {
                                         Toast.makeText(
                                             context,
-                                            "Failed to get latest release",
+                                            "No compatible package found",
                                             Toast.LENGTH_SHORT
                                         ).show()
                                         loading = false
                                         return@launch
                                     }
 
-                                    val latestRelease = res.body<GitHubRepoRelease>()
-                                    val asset = latestRelease.assets
-                                        .filter { it.name.endsWith(".apk") }
-                                        .map { asset ->
-                                            Pair(
-                                                asset,
-                                                Build.SUPPORTED_ABIS.indexOfFirst { abi ->
-                                                    asset.name.contains(abi)
-                                                }
-                                            )
-                                        }
-                                        .filter { (_, rank) -> rank > -1 }
-                                        .minByOrNull { (_, rank) -> rank }
-                                        .let { it?.first }
-
-                                    if (asset == null) {
-                                        Toast.makeText(
-                                            context,
-                                            "No compatible release asset found",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        loading = false
-                                        return@launch
-                                    }
-
-                                    AppInstaller(context).install(
-                                        asset.name,
-                                        asset.browserDownloadUrl,
-                                        asset.size
-                                    ) {
+                                    AppInstaller(context).install(pkg.name, pkg.uri) {
                                         progress = it
                                     }
 
@@ -273,8 +193,8 @@ private fun AddAppPagePreview() {
 }
 
 @Composable
-private fun RepoDetailsCard(
-    repo: GitHubRepo,
+private fun AppDetailsCard(
+    manifest: AppManifest,
     loading: Boolean,
     progress: Float?,
     onInstall: () -> Unit
@@ -283,15 +203,15 @@ private fun RepoDetailsCard(
 
     val avatar = remember {
         ImageRequest.Builder(context)
-            .data(repo.owner.avatarUrl)
+            .data(manifest.info.icon)
             .crossfade(true)
             .build()
     }
 
     ElevatedCard {
         ListItem(
-            headlineContent = { Text(repo.fullName) },
-            supportingContent = { Text(repo.htmlUrl) },
+            headlineContent = { Text(manifest.info.name) },
+            supportingContent = { Text(manifest.info.author) },
             leadingContent = {
                 AsyncImage(
                     model = avatar,
@@ -317,31 +237,10 @@ private fun RepoDetailsCard(
                     }
                 }
             },
-            modifier = Modifier.clickable {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(repo.htmlUrl))
+            modifier = Modifier.clickable(enabled = manifest.info.url != null) {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(manifest.info.url))
                 context.startActivity(intent)
             },
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun RepoDetailsCardPreview() {
-    LunaTheme(darkTheme = true) {
-        RepoDetailsCard(
-            repo = GitHubRepo(
-                name = "luna",
-                fullName = "hasali19/luna",
-                htmlUrl = "https://github.com/hasali19/luna",
-                owner = GitHubRepo.Owner(
-                    login = "hasali19",
-                    avatarUrl = "https://avatars.githubusercontent.com/u/10169241?v=4",
-                ),
-            ),
-            loading = true,
-            progress = 0.3f,
-            onInstall = {},
         )
     }
 }

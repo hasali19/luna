@@ -12,7 +12,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class AppInstaller(private val context: Context) {
-    suspend fun install(name: String, url: String, size: Long, onProgress: (Float) -> Unit) {
+    suspend fun install(name: String, url: String, onProgress: (Float) -> Unit) {
         logcat { "Beginning download of '$name' from '$url'" }
 
         val params =
@@ -28,6 +28,7 @@ class AppInstaller(private val context: Context) {
                     .apply { instanceFollowRedirects = true }
                 logcat { "Download request returned status ${connection.responseMessage}" }
                 val input = connection.inputStream
+                val size = connection.contentLength
                 val buffer = ByteArray(4096)
                 var totalBytesRead = 0
                 while (true) {
