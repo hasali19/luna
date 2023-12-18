@@ -48,34 +48,14 @@ import coil.request.ImageRequest
 import dev.hasali.luna.data.LunaDatabase
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.observer.ResponseObserver
 import io.ktor.client.request.get
-import io.ktor.client.statement.request
 import io.ktor.http.isSuccess
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
-import logcat.logcat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddAppPage(db: LunaDatabase) {
+fun AddAppPage(client: HttpClient, db: LunaDatabase) {
     val context = LocalContext.current
-
-    val client = remember {
-        HttpClient {
-            install(ContentNegotiation) {
-                json(Json {
-                    ignoreUnknownKeys = true
-                })
-            }
-
-            ResponseObserver {
-                logcat { "method=${it.request.method}, url=${it.request.url}, status=${it.status}" }
-            }
-        }
-    }
 
     val scope = rememberCoroutineScope()
     val onBackPressedDispatcherOwner = LocalOnBackPressedDispatcherOwner.current
@@ -163,7 +143,7 @@ fun AddAppPage(db: LunaDatabase) {
                                         progress = it
                                     }
 
-                                    if (result is AppInstaller.InstallationRequestResult.NoCompatiblePackage) {
+                                    if (result is AppInstaller.InstallationResult.NoCompatiblePackage) {
                                         Toast.makeText(
                                             context,
                                             "No compatible package found",

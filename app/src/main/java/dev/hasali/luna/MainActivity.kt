@@ -13,15 +13,36 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.hasali.luna.data.LunaDatabase
 import dev.hasali.luna.ui.theme.LunaTheme
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.observer.ResponseObserver
+import io.ktor.client.statement.request
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
+import logcat.logcat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        val client = HttpClient {
+            install(ContentNegotiation) {
+                json(Json {
+                    ignoreUnknownKeys = true
+                })
+            }
+
+            ResponseObserver {
+                logcat { "method=${it.request.method}, url=${it.request.url}, status=${it.status}" }
+            }
+        }
+
         val db = LunaDatabase.open(this)
+
         setContent {
             LunaTheme {
                 Surface {
-                    App(db)
+                    App(client, db)
                 }
             }
         }
@@ -29,14 +50,15 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun App(db: LunaDatabase) {
+private fun App(client: HttpClient, db: LunaDatabase) {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = "apps_list") {
         composable("apps_list") {
             AppsListPage(
+                client = client,
                 db = db,
-                onSearchApps = { navController.navigate("add_app") }
+                onSearchApps = { navController.navigate("add_app") },
             )
         }
 
@@ -49,7 +71,7 @@ private fun App(db: LunaDatabase) {
                 fadeOut() + slideOutOfContainer(towards = AnimatedContentTransitionScope.SlideDirection.End)
             }
         ) {
-            AddAppPage(db = db)
+            AddAppPage(client = client, db = db)
         }
     }
 }

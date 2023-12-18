@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
-import android.widget.Toast
 import logcat.logcat
 
 class InstallReceiver : BroadcastReceiver() {
@@ -14,6 +13,7 @@ class InstallReceiver : BroadcastReceiver() {
             PackageInstaller.EXTRA_STATUS, -123 // -1 is used by STATUS_PENDING_USER_ACTION
         )
 
+        val sessionId = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
         val packageName = intent.getStringExtra(PackageInstaller.EXTRA_PACKAGE_NAME)
 
         logcat { "Got status $status, packageName=$packageName" }
@@ -33,16 +33,14 @@ class InstallReceiver : BroadcastReceiver() {
             }
 
             PackageInstaller.STATUS_SUCCESS -> {
-                Toast.makeText(
-                    context, "Package installed successfully: $packageName", Toast.LENGTH_SHORT
-                ).show()
+                logcat { "Package installation succeeded for $packageName" }
+                PendingAppInstalls.notifySucceeded(sessionId)
             }
 
             else -> {
-                logcat {
-                    val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
-                    "Package installation failed for $packageName, msg=$message"
-                }
+                val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                logcat { "Package installation failed for $packageName, msg=$message" }
+                PendingAppInstalls.notifyFailed(sessionId, status, message)
             }
         }
     }

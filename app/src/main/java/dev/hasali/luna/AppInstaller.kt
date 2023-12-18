@@ -13,23 +13,28 @@ import java.net.URL
 
 class AppInstaller(private val context: Context) {
 
-    sealed interface InstallationRequestResult {
-        data object Success : InstallationRequestResult
-        data object NoCompatiblePackage : InstallationRequestResult
+    sealed interface InstallationResult {
+        data object Success : InstallationResult
+        data object NoCompatiblePackage : InstallationResult
+        data object UserCanceled : InstallationResult
+        data class Failure(val message: String?) : InstallationResult
     }
 
     suspend fun install(
         manifest: AppManifest,
         onProgress: (Float) -> Unit
-    ): InstallationRequestResult {
+    ): InstallationResult {
         val packages = manifest.packages.associateBy { it.abi ?: "any" }
         val abi = Build.SUPPORTED_ABIS.find { packages.containsKey(it) } ?: "any"
-        val pkg = packages[abi] ?: return InstallationRequestResult.NoCompatiblePackage
-        install(pkg.name, pkg.uri, onProgress)
-        return InstallationRequestResult.Success
+        val pkg = packages[abi] ?: return InstallationResult.NoCompatiblePackage
+        return install(pkg.name, pkg.uri, onProgress)
     }
 
-    private suspend fun install(name: String, url: String, onProgress: (Float) -> Unit) {
+    private suspend fun install(
+        name: String,
+        url: String,
+        onProgress: (Float) -> Unit
+    ): InstallationResult {
         logcat { "Beginning download of '$name' from '$url'" }
 
         val params =
@@ -89,6 +94,14 @@ class AppInstaller(private val context: Context) {
             logcat { "Committing install session for '$name'" }
             session.commit(receiver)
             session.close()
+        }
+
+        val (status, message) = PendingAppInstalls.await(sessionId)
+
+        return when (status) {
+            PackageInstaller.STATUS_SUCCESS -> InstallationResult.Success
+            PackageInstaller.STATUS_FAILURE_ABORTED -> InstallationResult.UserCanceled
+            else -> InstallationResult.Failure(message)
         }
     }
 }
