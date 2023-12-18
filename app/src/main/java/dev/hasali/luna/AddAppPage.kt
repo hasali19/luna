@@ -2,7 +2,6 @@ package dev.hasali.luna
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.clickable
@@ -43,11 +42,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import dev.hasali.luna.ui.theme.LunaTheme
+import dev.hasali.luna.data.LunaDatabase
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -62,7 +60,9 @@ import logcat.logcat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddAppPage() {
+fun AddAppPage(db: LunaDatabase) {
+    val context = LocalContext.current
+
     val client = remember {
         HttpClient {
             install(ContentNegotiation) {
@@ -95,7 +95,7 @@ fun AddAppPage() {
                     .padding(padding)
                     .padding(16.dp),
             ) {
-                var manifestUrl by remember { mutableStateOf("") }
+                var manifestUrl by remember { mutableStateOf("https://drive.google.com/uc?export=download&id=1JWg1vM9D0KZbILv3-YDUeHSs_-3kWxyH") }
                 var manifest: AppManifest? by remember { mutableStateOf(null) }
 
                 Column {
@@ -107,8 +107,6 @@ fun AddAppPage() {
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
-
-                    val context = LocalContext.current
 
                     Button(
                         modifier = Modifier.align(Alignment.CenterHorizontally),
@@ -153,23 +151,24 @@ fun AddAppPage() {
                             onInstall = {
                                 loading = true
                                 scope.launch {
-                                    val packages = manifest.packages.associateBy { it.abi ?: "any" }
-                                    val abi = Build.SUPPORTED_ABIS.find { packages.containsKey(it) }
-                                        ?: "any"
-                                    val pkg = packages[abi]
+                                    db.packageDao().insert(
+                                        dev.hasali.luna.data.Package(
+                                            label = manifest.info.name,
+                                            packageName = manifest.info.packageName,
+                                            manifestUrl = manifestUrl,
+                                        )
+                                    )
 
-                                    if (pkg == null) {
+                                    val result = AppInstaller(context).install(manifest) {
+                                        progress = it
+                                    }
+
+                                    if (result is AppInstaller.InstallationRequestResult.NoCompatiblePackage) {
                                         Toast.makeText(
                                             context,
                                             "No compatible package found",
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                        loading = false
-                                        return@launch
-                                    }
-
-                                    AppInstaller(context).install(pkg.name, pkg.uri) {
-                                        progress = it
                                     }
 
                                     loading = false
@@ -181,14 +180,6 @@ fun AddAppPage() {
                 }
             }
         }
-    }
-}
-
-@Preview
-@Composable
-private fun AddAppPagePreview() {
-    LunaTheme(darkTheme = true) {
-        AddAppPage()
     }
 }
 

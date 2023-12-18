@@ -11,15 +11,17 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import dev.hasali.luna.data.LunaDatabase
 import dev.hasali.luna.ui.theme.LunaTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val db = LunaDatabase.open(this)
         setContent {
             LunaTheme {
                 Surface {
-                    App()
+                    App(db)
                 }
             }
         }
@@ -27,12 +29,13 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun App() {
+private fun App(db: LunaDatabase) {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = "apps_list") {
         composable("apps_list") {
             AppsListPage(
+                db = db,
                 onSearchApps = { navController.navigate("add_app") }
             )
         }
@@ -46,7 +49,7 @@ private fun App() {
                 fadeOut() + slideOutOfContainer(towards = AnimatedContentTransitionScope.SlideDirection.End)
             }
         ) {
-            AddAppPage()
+            AddAppPage(db = db)
         }
     }
 }

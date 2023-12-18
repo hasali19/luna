@@ -12,7 +12,24 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class AppInstaller(private val context: Context) {
-    suspend fun install(name: String, url: String, onProgress: (Float) -> Unit) {
+
+    sealed interface InstallationRequestResult {
+        data object Success : InstallationRequestResult
+        data object NoCompatiblePackage : InstallationRequestResult
+    }
+
+    suspend fun install(
+        manifest: AppManifest,
+        onProgress: (Float) -> Unit
+    ): InstallationRequestResult {
+        val packages = manifest.packages.associateBy { it.abi ?: "any" }
+        val abi = Build.SUPPORTED_ABIS.find { packages.containsKey(it) } ?: "any"
+        val pkg = packages[abi] ?: return InstallationRequestResult.NoCompatiblePackage
+        install(pkg.name, pkg.uri, onProgress)
+        return InstallationRequestResult.Success
+    }
+
+    private suspend fun install(name: String, url: String, onProgress: (Float) -> Unit) {
         logcat { "Beginning download of '$name' from '$url'" }
 
         val params =
