@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +51,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,7 +64,7 @@ fun AddAppPage(client: HttpClient, db: LunaDatabase) {
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Install from repo") }, navigationIcon = {
+            TopAppBar(title = { Text("Add App") }, navigationIcon = {
                 IconButton(onClick = { onBackPressedDispatcherOwner?.onBackPressedDispatcher?.onBackPressed() }) {
                     Icon(Icons.Default.ArrowBack, contentDescription = null)
                 }
@@ -82,54 +84,71 @@ fun AddAppPage(client: HttpClient, db: LunaDatabase) {
                     TextField(
                         modifier = Modifier.fillMaxWidth(),
                         value = manifestUrl,
-                        placeholder = { Text("Url") },
+                        placeholder = { Text("Manifest url") },
                         onValueChange = { manifestUrl = it },
                     )
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    Button(
-                        modifier = Modifier.align(Alignment.CenterHorizontally),
-                        onClick = {
-                            scope.launch {
-                                val res = client.get(manifestUrl)
-                                if (res.status.isSuccess()) {
-                                    manifest = res.body<AppManifest>()
-                                } else {
-                                    Toast.makeText(context, "App not found", Toast.LENGTH_SHORT)
-                                        .show()
+                    var loading by remember { mutableStateOf(false) }
+
+                    if (loading) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                    } else {
+                        Button(
+                            modifier = Modifier.align(Alignment.CenterHorizontally),
+                            onClick = {
+                                manifest = null
+                                loading = true
+                                scope.launch {
+                                    val res = client.get(manifestUrl)
+                                    if (res.status.isSuccess()) {
+                                        manifest = res.body<AppManifest>()
+                                    } else {
+                                        Toast.makeText(context, "App not found", Toast.LENGTH_SHORT)
+                                            .show()
+                                    }
+                                    loading = false
                                 }
+                            },
+                        ) {
+                            Row {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                Text("Search")
                             }
-                        },
-                    ) {
-                        Row {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                            )
-
-                            Spacer(modifier = Modifier.width(8.dp))
-
-                            Text("Search")
                         }
                     }
 
                     manifest?.let { manifest ->
-                        var loading by remember { mutableStateOf(false) }
+                        var installing by remember { mutableStateOf(false) }
                         var progress: Float? by remember {
                             mutableStateOf(
                                 null
                             )
                         }
 
+                        var isAdded: Boolean? by remember { mutableStateOf(null) }
+
+                        LaunchedEffect(manifest) {
+                            isAdded = db.packageDao().getByPackageName(manifest.info.packageName)
+                                .firstOrNull() != null
+                        }
+
                         Spacer(modifier = Modifier.height(32.dp))
                         AppDetailsCard(
                             manifest = manifest,
-                            loading = loading,
+                            isAdded = isAdded,
+                            installing = installing,
                             progress = progress,
                             onInstall = {
-                                loading = true
+                                installing = true
                                 scope.launch {
                                     db.packageDao().insert(
                                         dev.hasali.luna.data.Package(
@@ -151,7 +170,7 @@ fun AddAppPage(client: HttpClient, db: LunaDatabase) {
                                         ).show()
                                     }
 
-                                    loading = false
+                                    installing = false
                                     progress = null
                                 }
                             }
@@ -166,7 +185,8 @@ fun AddAppPage(client: HttpClient, db: LunaDatabase) {
 @Composable
 private fun AppDetailsCard(
     manifest: AppManifest,
-    loading: Boolean,
+    isAdded: Boolean?,
+    installing: Boolean,
     progress: Float?,
     onInstall: () -> Unit
 ) {
@@ -192,14 +212,18 @@ private fun AppDetailsCard(
                         .clip(CircleShape),
                 )
             },
-            trailingContent = {
-                OutlinedIconButton(enabled = !loading, onClick = onInstall) {
+            trailingContent = if (isAdded == null) {
+                null
+            } else if (isAdded) ({
+                Text("Added")
+            }) else ({
+                OutlinedIconButton(enabled = !installing, onClick = onInstall) {
                     Icon(
                         painter = painterResource(id = R.drawable.ic_download),
                         contentDescription = null,
                     )
 
-                    if (loading) {
+                    if (installing) {
                         if (progress == null) {
                             CircularProgressIndicator(strokeWidth = 2.dp)
                         } else {
@@ -207,7 +231,7 @@ private fun AppDetailsCard(
                         }
                     }
                 }
-            },
+            }),
             modifier = Modifier.clickable(enabled = manifest.info.url != null) {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(manifest.info.url))
                 context.startActivity(intent)

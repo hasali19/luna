@@ -10,6 +10,9 @@ interface PackageDao {
     @Query("SELECT * FROM Package")
     fun getAll(): Flow<List<Package>>
 
+    @Query("SELECT * FROM Package WHERE packageName = :packageName")
+    fun getByPackageName(packageName: String): Flow<Package>
+
     @Insert
     suspend fun insert(pgk: Package)
 }
