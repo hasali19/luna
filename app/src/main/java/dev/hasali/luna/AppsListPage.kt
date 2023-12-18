@@ -6,10 +6,12 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -20,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -87,12 +90,11 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
                                     ) {
                                         Text("Installed", modifier = Modifier.weight(1f))
                                         if (availableUpdates == null || availableUpdates!!.isEmpty()) {
-                                            var loading by remember { mutableStateOf(false) }
-                                            if (loading) {
-                                                CircularProgressIndicator()
-                                            } else {
-                                                Button(onClick = {
-                                                    loading = true
+                                            var isLoading by remember { mutableStateOf(false) }
+                                            Button(
+                                                enabled = !isLoading,
+                                                onClick = {
+                                                    isLoading = true
                                                     scope.launch {
                                                         val updates = mutableListOf<AppManifest>()
                                                         for (pkg in packages) {
@@ -134,56 +136,78 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
                                                             }
                                                         }
                                                         availableUpdates = updates
-                                                        loading = false
+                                                        isLoading = false
                                                     }
-                                                }) {
-                                                    Text("Check for updates")
+                                                },
+                                            ) {
+                                                Text("Check for updates")
+                                                if (isLoading) {
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(16.dp),
+                                                        color = LocalContentColor.current,
+                                                        strokeWidth = 2.dp,
+                                                    )
                                                 }
                                             }
                                         } else {
-                                            Button(onClick = {
-                                                scope.launch {
-                                                    for (manifest in availableUpdates!!) {
-                                                        val result =
-                                                            AppInstaller(context).install(manifest) {}
+                                            var isUpdating by remember { mutableStateOf(false) }
+                                            Button(
+                                                enabled = !isUpdating,
+                                                onClick = {
+                                                    isUpdating = true
+                                                    scope.launch {
+                                                        for (manifest in availableUpdates!!) {
+                                                            val result = AppInstaller(context)
+                                                                .install(manifest) {}
 
-                                                        when (result) {
-                                                            is AppInstaller.InstallationResult.Success -> {
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Package installed successfully: ${manifest.info.packageName}",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                            }
+                                                            when (result) {
+                                                                is AppInstaller.InstallationResult.Success -> {
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Package installed successfully: ${manifest.info.packageName}",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                }
 
-                                                            is AppInstaller.InstallationResult.NoCompatiblePackage -> {
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "No compatible package found",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                            }
+                                                                is AppInstaller.InstallationResult.NoCompatiblePackage -> {
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "No compatible package found",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                }
 
-                                                            is AppInstaller.InstallationResult.UserCanceled -> {
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Installation was canceled",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
-                                                            }
+                                                                is AppInstaller.InstallationResult.UserCanceled -> {
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Installation was canceled",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                }
 
-                                                            is AppInstaller.InstallationResult.Failure -> {
-                                                                Toast.makeText(
-                                                                    context,
-                                                                    "Installation failed: ${result.message}",
-                                                                    Toast.LENGTH_SHORT
-                                                                ).show()
+                                                                is AppInstaller.InstallationResult.Failure -> {
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Installation failed: ${result.message}",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                }
                                                             }
                                                         }
+                                                        isUpdating = false
                                                     }
-                                                }
-                                            }) {
+                                                },
+                                            ) {
                                                 Text("Update all (${availableUpdates!!.size})")
+                                                if (isUpdating) {
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    CircularProgressIndicator(
+                                                        modifier = Modifier.size(16.dp),
+                                                        color = LocalContentColor.current,
+                                                        strokeWidth = 2.dp,
+                                                    )
+                                                }
                                             }
                                         }
                                     }
