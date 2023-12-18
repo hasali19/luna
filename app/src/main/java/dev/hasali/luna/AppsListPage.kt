@@ -4,6 +4,7 @@ import android.content.pm.PackageManager.NameNotFoundException
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -43,6 +45,8 @@ import io.ktor.client.request.get
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.launch
 import logcat.logcat
+import java.text.DateFormat
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,48 +87,58 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
                                     ) {
                                         Text("Installed", modifier = Modifier.weight(1f))
                                         if (availableUpdates == null || availableUpdates!!.isEmpty()) {
-                                            Button(onClick = {
-                                                scope.launch {
-                                                    val updates = mutableListOf<AppManifest>()
-                                                    for (pkg in packages) {
-                                                        val packageInfo =
-                                                            context.packageManager.getPackageInfo(
-                                                                pkg.packageName,
-                                                                0
-                                                            )
-                                                                ?: continue
+                                            var loading by remember { mutableStateOf(false) }
+                                            if (loading) {
+                                                CircularProgressIndicator()
+                                            } else {
+                                                Button(onClick = {
+                                                    loading = true
+                                                    scope.launch {
+                                                        val updates = mutableListOf<AppManifest>()
+                                                        for (pkg in packages) {
+                                                            val packageInfo = try {
+                                                                context.packageManager.getPackageInfo(
+                                                                    pkg.packageName,
+                                                                    0
+                                                                )
+                                                            } catch (e: NameNotFoundException) {
+                                                                null
+                                                            } ?: continue
 
-                                                        logcat { "Retrieving manifest for ${pkg.packageName} from ${pkg.manifestUrl}" }
+                                                            logcat { "Retrieving manifest for ${pkg.packageName} from ${pkg.manifestUrl}" }
 
-                                                        val res = client.get(pkg.manifestUrl)
-                                                        val manifest = if (res.status.isSuccess()) {
-                                                            res.body<AppManifest>()
-                                                        } else {
-                                                            Toast.makeText(
-                                                                context,
-                                                                "Failed to get manifest: ${pkg.label}",
-                                                                Toast.LENGTH_SHORT
-                                                            ).show()
-                                                            return@launch
-                                                        }
+                                                            val res = client.get(pkg.manifestUrl)
+                                                            val manifest =
+                                                                if (res.status.isSuccess()) {
+                                                                    res.body<AppManifest>()
+                                                                } else {
+                                                                    Toast.makeText(
+                                                                        context,
+                                                                        "Failed to get manifest: ${pkg.label}",
+                                                                        Toast.LENGTH_SHORT
+                                                                    ).show()
+                                                                    return@launch
+                                                                }
 
-                                                        val installedVersionCode =
-                                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                                                                packageInfo.longVersionCode
-                                                            } else {
-                                                                @Suppress("DEPRECATION")
-                                                                packageInfo.versionCode.toLong()
+                                                            val installedVersionCode =
+                                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                                                    packageInfo.longVersionCode
+                                                                } else {
+                                                                    @Suppress("DEPRECATION")
+                                                                    packageInfo.versionCode.toLong()
+                                                                }
+
+                                                            if (manifest.info.versionCode > installedVersionCode) {
+                                                                logcat { "Update available for ${pkg.packageName}, installed=$installedVersionCode, latest=${manifest.info.versionCode}" }
+                                                                updates.add(manifest)
                                                             }
-
-                                                        if (manifest.info.versionCode > installedVersionCode) {
-                                                            logcat { "Update available for ${pkg.packageName}, installed=$installedVersionCode, latest=${manifest.info.versionCode}" }
-                                                            updates.add(manifest)
                                                         }
+                                                        availableUpdates = updates
+                                                        loading = false
                                                     }
-                                                    availableUpdates = updates
+                                                }) {
+                                                    Text("Check for updates")
                                                 }
-                                            }) {
-                                                Text("Check for updates")
                                             }
                                         } else {
                                             Button(onClick = {
@@ -176,7 +190,38 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
                                 }
 
                                 items(packages) {
-                                    AppsListItem(pkg = it)
+                                    AppsListItem(
+                                        pkg = it,
+                                        onInstall = {
+                                            scope.launch {
+                                                logcat { "Retrieving manifest for ${it.packageName} from ${it.manifestUrl}" }
+
+                                                val res = client.get(it.manifestUrl)
+                                                val manifest =
+                                                    if (res.status.isSuccess()) {
+                                                        res.body<AppManifest>()
+                                                    } else {
+                                                        Toast.makeText(
+                                                            context,
+                                                            "Failed to get manifest: ${it.label}",
+                                                            Toast.LENGTH_SHORT
+                                                        ).show()
+                                                        return@launch
+                                                    }
+
+                                                val result =
+                                                    AppInstaller(context).install(manifest) { }
+
+                                                if (result is AppInstaller.InstallationResult.NoCompatiblePackage) {
+                                                    Toast.makeText(
+                                                        context,
+                                                        "No compatible package found",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+                                                }
+                                            }
+                                        },
+                                    )
                                 }
                             }
                         }
@@ -188,7 +233,7 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
 }
 
 @Composable
-private fun AppsListItem(pkg: Package) {
+private fun AppsListItem(pkg: Package, onInstall: () -> Unit) {
     val context = LocalContext.current
     val packageInfo = remember(pkg.packageName) {
         try {
@@ -214,10 +259,29 @@ private fun AppsListItem(pkg: Package) {
         null
     }
 
+    val trailingContent: @Composable () -> Unit = if (packageInfo != null) ({
+        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            packageInfo.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.versionCode.toLong()
+        }
+
+        Column(horizontalAlignment = Alignment.End) {
+            Text("${packageInfo.versionName}-${versionCode}")
+            Text(DateFormat.getDateInstance().format(Date(packageInfo.lastUpdateTime)))
+        }
+    }) else ({
+        TextButton(onClick = onInstall) {
+            Text("Install")
+        }
+    })
+
     ListItem(
         headlineContent = { Text(pkg.label) },
         supportingContent = { Text(pkg.packageName) },
         overlineContent = overlineContent,
         leadingContent = leadingContent,
+        trailingContent = trailingContent,
     )
 }
