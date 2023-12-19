@@ -77,7 +77,7 @@ fun AddAppPage(client: HttpClient, db: LunaDatabase) {
                     .padding(padding)
                     .padding(16.dp),
             ) {
-                var manifestUrl by remember { mutableStateOf("https://drive.google.com/uc?export=download&id=1JWg1vM9D0KZbILv3-YDUeHSs_-3kWxyH") }
+                var manifestUrl by remember { mutableStateOf("") }
                 var manifest: AppManifest? by remember { mutableStateOf(null) }
 
                 Column {
