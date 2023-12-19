@@ -27,12 +27,13 @@ class AppInstaller(private val context: Context) {
         val packages = manifest.packages.associateBy { it.abi ?: "any" }
         val abi = Build.SUPPORTED_ABIS.find { packages.containsKey(it) } ?: "any"
         val pkg = packages[abi] ?: return InstallationResult.NoCompatiblePackage
-        return install(pkg.name, pkg.uri, onProgress)
+        return install(pkg.name, pkg.uri, manifest.info.packageName, onProgress)
     }
 
     private suspend fun install(
         name: String,
         url: String,
+        packageName: String,
         onProgress: (Float) -> Unit
     ): InstallationResult {
         logcat { "Beginning download of '$name' from '$url'" }
@@ -82,19 +83,10 @@ class AppInstaller(private val context: Context) {
             PendingIntent.getBroadcast(context, 3439, intent, flags)
         val receiver = pendingIntent.intentSender
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            logcat { "Requesting install with GENTLE_UPDATE for '$name'" }
-            packageInstaller.commitSessionAfterInstallConstraintsAreMet(
-                sessionId,
-                receiver,
-                PackageInstaller.InstallConstraints.GENTLE_UPDATE,
-                1000 * 60 * 60 * 24 * 7 // 1 week
-            )
-        } else {
-            logcat { "Committing install session for '$name'" }
-            session.commit(receiver)
-            session.close()
-        }
+        logcat { "Committing install session for '$name'" }
+
+        session.commit(receiver)
+        session.close()
 
         val (status, message) = PendingAppInstalls.await(sessionId)
 
