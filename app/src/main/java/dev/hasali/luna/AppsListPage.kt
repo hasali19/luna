@@ -159,7 +159,7 @@ private fun AppsListItem(model: PackageModel, onInstall: () -> Unit) {
                 }
             } else {
                 Text(
-                    text = "${manifest.info.version}-${manifest.info.versionCode}",
+                    text = "${packageInfo.versionName}-${installedVersionCode} ~ ${manifest.info.version}-${manifest.info.versionCode}",
                     fontStyle = FontStyle.Italic,
                     textDecoration = TextDecoration.Underline,
                 )

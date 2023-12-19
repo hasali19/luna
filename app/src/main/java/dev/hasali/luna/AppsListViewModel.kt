@@ -36,7 +36,7 @@ private val DEFAULT_PACKAGES = listOf(
         id = -1,
         label = "Luna",
         packageName = "dev.hasali.luna",
-        manifestUrl = "https://github.com",
+        manifestUrl = "https://github.com/hasali19/luna",
     ),
 )
 
