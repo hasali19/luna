@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "name": "Luna",
+  "info": {
+    "name": "Luna",
+    "author": "hasali19",
+    "url": "https://github.com/hasali19/luna",
+    "version": "1.0.0",
+    "versionCode": 0,
+    "packageName": "dev.hasali.luna"
+  },
+  "packages": [
+    {
+      "name": "luna.apk",
+      "url": "https://github.com/hasali19/luna/releases/download/latest/luna.apk"
+    }
+  ]
+}

@@ -1,9 +1,25 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp") version "1.9.21-1.0.15"
     id("org.jetbrains.kotlin.android")
     kotlin("plugin.serialization") version "1.9.21"
 }
+
+val keystoreProperties = Properties()
+val keystorePropertiesFile: File = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+val releaseKeyAlias: String? = keystoreProperties.getProperty("keyAlias")
+    ?: System.getenv("ANDROID_KEYSTORE_KEY_ALIAS")
+val releaseStorePassword: String? = keystoreProperties.getProperty("storePassword")
+    ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseStoreFile: String? = keystoreProperties.getProperty("storeFile")
+    ?: System.getenv("ANDROID_KEYSTORE_PATH")
 
 android {
     namespace = "dev.hasali.luna"
@@ -13,12 +29,21 @@ android {
         applicationId = "dev.hasali.luna"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = project.findProperty("versionCode")?.toString()?.toInt() ?: 1
+        versionName = project.findProperty("versionName")?.toString() ?: "0.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseStorePassword
+            storeFile = releaseStoreFile?.let { File(it) }
+            storePassword = releaseStorePassword
         }
     }
 
@@ -29,21 +54,27 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs["release"]
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
     }
+
     buildFeatures {
         compose = true
     }
+
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.1"
     }
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
