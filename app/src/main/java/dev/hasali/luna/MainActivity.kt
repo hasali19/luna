@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -47,31 +48,38 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-}
 
-@Composable
-private fun App(client: HttpClient, db: LunaDatabase) {
-    val navController = rememberNavController()
+    @Composable
+    private fun App(client: HttpClient, db: LunaDatabase) {
+        val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "apps_list") {
-        composable("apps_list") {
-            AppsListPage(
-                client = client,
-                db = db,
-                onSearchApps = { navController.navigate("add_app") },
-            )
-        }
-
-        composable(
-            "add_app",
-            enterTransition = {
-                fadeIn() + slideIntoContainer(towards = AnimatedContentTransitionScope.SlideDirection.Start)
-            },
-            exitTransition = {
-                fadeOut() + slideOutOfContainer(towards = AnimatedContentTransitionScope.SlideDirection.End)
+        NavHost(navController = navController, startDestination = "apps_list") {
+            composable("apps_list") {
+                AppsListPage(
+                    viewModel = viewModel {
+                        AppsListViewModel(
+                            application = application,
+                            client = client,
+                            db = db,
+                        )
+                    },
+                    // client = client,
+                    // db = db,
+                    onSearchApps = { navController.navigate("add_app") },
+                )
             }
-        ) {
-            AddAppPage(client = client, db = db)
+
+            composable(
+                "add_app",
+                enterTransition = {
+                    fadeIn() + slideIntoContainer(towards = AnimatedContentTransitionScope.SlideDirection.Start)
+                },
+                exitTransition = {
+                    fadeOut() + slideOutOfContainer(towards = AnimatedContentTransitionScope.SlideDirection.End)
+                }
+            ) {
+                AddAppPage(client = client, db = db)
+            }
         }
     }
 }

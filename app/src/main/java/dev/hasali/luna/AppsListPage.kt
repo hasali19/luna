@@ -1,8 +1,6 @@
 package dev.hasali.luna
 
-import android.content.pm.PackageManager.NameNotFoundException
 import android.os.Build
-import android.widget.Toast
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,36 +29,23 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import dev.hasali.luna.data.LunaDatabase
-import dev.hasali.luna.data.Package
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.request.get
-import io.ktor.http.isSuccess
-import kotlinx.coroutines.launch
-import logcat.logcat
 import java.text.DateFormat
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit) {
-    val packages by remember { db.packageDao().getAll() }
-        .collectAsState(initial = null)
-
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    var availableUpdates: List<AppManifest>? by remember { mutableStateOf(null) }
+fun AppsListPage(
+    viewModel: AppsListViewModel,
+    onSearchApps: () -> Unit,
+) {
+    val packages by viewModel.packages.collectAsState(initial = null)
+    val availableUpdates by viewModel.updatedManifests.collectAsState(initial = null)
 
     Scaffold(topBar = { TopAppBar(title = { Text("Apps") }) }, floatingActionButton = {
         FloatingActionButton(onClick = onSearchApps) {
@@ -90,58 +75,12 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
                                     ) {
                                         Text("Installed", modifier = Modifier.weight(1f))
                                         if (availableUpdates == null || availableUpdates!!.isEmpty()) {
-                                            var isLoading by remember { mutableStateOf(false) }
                                             Button(
-                                                enabled = !isLoading,
-                                                onClick = {
-                                                    isLoading = true
-                                                    scope.launch {
-                                                        val updates = mutableListOf<AppManifest>()
-                                                        for (pkg in packages) {
-                                                            val packageInfo = try {
-                                                                context.packageManager.getPackageInfo(
-                                                                    pkg.packageName,
-                                                                    0
-                                                                )
-                                                            } catch (e: NameNotFoundException) {
-                                                                null
-                                                            } ?: continue
-
-                                                            logcat { "Retrieving manifest for ${pkg.packageName} from ${pkg.manifestUrl}" }
-
-                                                            val res = client.get(pkg.manifestUrl)
-                                                            val manifest =
-                                                                if (res.status.isSuccess()) {
-                                                                    res.body<AppManifest>()
-                                                                } else {
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "Failed to get manifest: ${pkg.label}",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                    return@launch
-                                                                }
-
-                                                            val installedVersionCode =
-                                                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                                                                    packageInfo.longVersionCode
-                                                                } else {
-                                                                    @Suppress("DEPRECATION")
-                                                                    packageInfo.versionCode.toLong()
-                                                                }
-
-                                                            if (manifest.info.versionCode > installedVersionCode) {
-                                                                logcat { "Update available for ${pkg.packageName}, installed=$installedVersionCode, latest=${manifest.info.versionCode}" }
-                                                                updates.add(manifest)
-                                                            }
-                                                        }
-                                                        availableUpdates = updates
-                                                        isLoading = false
-                                                    }
-                                                },
+                                                enabled = !viewModel.isCheckingForUpdates,
+                                                onClick = viewModel::checkForUpdates,
                                             ) {
                                                 Text("Check for updates")
-                                                if (isLoading) {
+                                                if (viewModel.isCheckingForUpdates) {
                                                     Spacer(modifier = Modifier.width(8.dp))
                                                     CircularProgressIndicator(
                                                         modifier = Modifier.size(16.dp),
@@ -151,56 +90,12 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
                                                 }
                                             }
                                         } else {
-                                            var isUpdating by remember { mutableStateOf(false) }
                                             Button(
-                                                enabled = !isUpdating,
-                                                onClick = {
-                                                    isUpdating = true
-                                                    scope.launch {
-                                                        for (manifest in availableUpdates!!) {
-                                                            val result = AppInstaller(context)
-                                                                .install(manifest) {}
-
-                                                            when (result) {
-                                                                is AppInstaller.InstallationResult.Success -> {
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "Package installed successfully: ${manifest.info.packageName}",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                }
-
-                                                                is AppInstaller.InstallationResult.NoCompatiblePackage -> {
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "No compatible package found",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                }
-
-                                                                is AppInstaller.InstallationResult.UserCanceled -> {
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "Installation was canceled",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                }
-
-                                                                is AppInstaller.InstallationResult.Failure -> {
-                                                                    Toast.makeText(
-                                                                        context,
-                                                                        "Installation failed: ${result.message}",
-                                                                        Toast.LENGTH_SHORT
-                                                                    ).show()
-                                                                }
-                                                            }
-                                                        }
-                                                        isUpdating = false
-                                                    }
-                                                },
+                                                enabled = !viewModel.isUpdating,
+                                                onClick = viewModel::updateAll,
                                             ) {
                                                 Text("Update all (${availableUpdates!!.size})")
-                                                if (isUpdating) {
+                                                if (viewModel.isUpdating) {
                                                     Spacer(modifier = Modifier.width(8.dp))
                                                     CircularProgressIndicator(
                                                         modifier = Modifier.size(16.dp),
@@ -215,36 +110,8 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
 
                                 items(packages) {
                                     AppsListItem(
-                                        pkg = it,
-                                        onInstall = {
-                                            scope.launch {
-                                                logcat { "Retrieving manifest for ${it.packageName} from ${it.manifestUrl}" }
-
-                                                val res = client.get(it.manifestUrl)
-                                                val manifest =
-                                                    if (res.status.isSuccess()) {
-                                                        res.body<AppManifest>()
-                                                    } else {
-                                                        Toast.makeText(
-                                                            context,
-                                                            "Failed to get manifest: ${it.label}",
-                                                            Toast.LENGTH_SHORT
-                                                        ).show()
-                                                        return@launch
-                                                    }
-
-                                                val result =
-                                                    AppInstaller(context).install(manifest) { }
-
-                                                if (result is AppInstaller.InstallationResult.NoCompatiblePackage) {
-                                                    Toast.makeText(
-                                                        context,
-                                                        "No compatible package found",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
-                                                }
-                                            }
-                                        },
+                                        model = it,
+                                        onInstall = { viewModel.install(it) },
                                     )
                                 }
                             }
@@ -257,15 +124,8 @@ fun AppsListPage(client: HttpClient, db: LunaDatabase, onSearchApps: () -> Unit)
 }
 
 @Composable
-private fun AppsListItem(pkg: Package, onInstall: () -> Unit) {
-    val context = LocalContext.current
-    val packageInfo = remember(pkg.packageName) {
-        try {
-            context.packageManager.getPackageInfo(pkg.packageName, 0)
-        } catch (e: NameNotFoundException) {
-            null
-        }
-    }
+private fun AppsListItem(model: PackageModel, onInstall: () -> Unit) {
+    val packageInfo = model.info
 
     val overlineContent: (@Composable () -> Unit)? = if (packageInfo == null) ({
         Text("Not installed")
@@ -273,9 +133,9 @@ private fun AppsListItem(pkg: Package, onInstall: () -> Unit) {
         null
     }
 
-    val leadingContent: (@Composable () -> Unit)? = if (packageInfo != null) ({
+    val leadingContent: (@Composable () -> Unit)? = if (model.icon != null) ({
         AsyncImage(
-            model = packageInfo.applicationInfo.loadIcon(context.packageManager),
+            model = model.icon,
             contentDescription = null,
             modifier = Modifier.size(48.dp)
         )
@@ -284,17 +144,28 @@ private fun AppsListItem(pkg: Package, onInstall: () -> Unit) {
     }
 
     val trailingContent: @Composable () -> Unit = if (packageInfo != null) ({
-        val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        val installedVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             packageInfo.longVersionCode
         } else {
             @Suppress("DEPRECATION")
             packageInfo.versionCode.toLong()
         }
 
-        Column(horizontalAlignment = Alignment.End) {
-            Text("${packageInfo.versionName}-${versionCode}")
-            Text(DateFormat.getDateInstance().format(Date(packageInfo.lastUpdateTime)))
+        model.manifest.let { manifest ->
+            if (manifest == null || manifest.info.versionCode <= installedVersionCode) {
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("${packageInfo.versionName}-${installedVersionCode}")
+                    Text(DateFormat.getDateInstance().format(Date(packageInfo.lastUpdateTime)))
+                }
+            } else {
+                Text(
+                    text = "${manifest.info.version}-${manifest.info.versionCode}",
+                    fontStyle = FontStyle.Italic,
+                    textDecoration = TextDecoration.Underline,
+                )
+            }
         }
+
     }) else ({
         TextButton(onClick = onInstall) {
             Text("Install")
@@ -302,8 +173,8 @@ private fun AppsListItem(pkg: Package, onInstall: () -> Unit) {
     })
 
     ListItem(
-        headlineContent = { Text(pkg.label) },
-        supportingContent = { Text(pkg.packageName) },
+        headlineContent = { Text(model.pkg.label) },
+        supportingContent = { Text(model.pkg.packageName) },
         overlineContent = overlineContent,
         leadingContent = leadingContent,
         trailingContent = trailingContent,
