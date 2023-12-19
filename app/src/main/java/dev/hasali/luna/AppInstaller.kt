@@ -27,19 +27,23 @@ class AppInstaller(private val context: Context) {
         val packages = manifest.packages.associateBy { it.abi ?: "any" }
         val abi = Build.SUPPORTED_ABIS.find { packages.containsKey(it) } ?: "any"
         val pkg = packages[abi] ?: return InstallationResult.NoCompatiblePackage
-        return install(pkg.name, pkg.uri, manifest.info.packageName, onProgress)
+        return install(pkg.name, pkg.uri, onProgress)
     }
 
     private suspend fun install(
         name: String,
         url: String,
-        packageName: String,
         onProgress: (Float) -> Unit
     ): InstallationResult {
         logcat { "Beginning download of '$name' from '$url'" }
 
         val params =
-            PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+            PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                }
+            }
+
         val packageInstaller = context.packageManager.packageInstaller
 
         val sessionId = packageInstaller.createSession(params)
