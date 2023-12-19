@@ -12,7 +12,7 @@
   "packages": [
     {
       "name": "luna.apk",
-      "url": "https://github.com/hasali19/luna/releases/download/latest/luna.apk"
+      "uri": "https://github.com/hasali19/luna/releases/download/latest/luna.apk"
     }
   ]
 }
