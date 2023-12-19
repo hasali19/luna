@@ -2,10 +2,11 @@ import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
-    id("com.android.application")
-    id("com.google.devtools.ksp") version "1.9.21-1.0.15"
-    id("org.jetbrains.kotlin.android")
     kotlin("plugin.serialization") version "1.9.21"
+    id("com.android.application")
+    id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.android")
+    id("androidx.room")
 }
 
 val keystoreProperties = Properties()
@@ -80,6 +81,10 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
