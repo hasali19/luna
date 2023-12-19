@@ -18,10 +18,14 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.observer.ResponseObserver
 import io.ktor.client.statement.request
+import io.ktor.http.ContentType
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.serialization.kotlinx.serialization
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import logcat.logcat
 
+@OptIn(ExperimentalSerializationApi::class)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,6 +34,12 @@ class MainActivity : ComponentActivity() {
             install(ContentNegotiation) {
                 json(Json {
                     ignoreUnknownKeys = true
+                    explicitNulls = false
+                })
+
+                serialization(ContentType.Application.OctetStream, Json {
+                    ignoreUnknownKeys = true
+                    explicitNulls = false
                 })
             }
 
