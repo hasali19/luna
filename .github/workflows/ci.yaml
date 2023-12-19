@@ -16,13 +16,13 @@ jobs:
           java-version: 17
 
       - run: |
-          echo $ANDROID_KEYSTORE | base64 -d > app/$ANDROID_KEYSTORE_PATH
+          export ANDROID_KEYSTORE_PATH="$(pwd)/app/keystore.jks"
+          echo $ANDROID_KEYSTORE | base64 -d > $ANDROID_KEYSTORE_PATH
           sh gradlew assembleRelease -PversionCode=$GITHUB_RUN_NUMBER -PversionName=1.0.0
         env:
           ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
           ANDROID_KEYSTORE_KEY_ALIAS: ${{ secrets.ANDROID_KEYSTORE_KEY_ALIAS }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEYSTORE_PATH: keystore.jks
 
       - uses: actions/upload-artifact@v3
         with:
