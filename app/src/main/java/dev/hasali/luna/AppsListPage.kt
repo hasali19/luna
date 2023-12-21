@@ -1,6 +1,5 @@
 package dev.hasali.luna
 
-import android.os.Build
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -144,14 +143,8 @@ private fun AppsListItem(model: PackageModel, onInstall: () -> Unit) {
     }
 
     val trailingContent: @Composable () -> Unit = if (packageInfo != null) ({
-        val installedVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            packageInfo.longVersionCode
-        } else {
-            @Suppress("DEPRECATION")
-            packageInfo.versionCode.toLong()
-        }
-
         model.manifest.let { manifest ->
+            val installedVersionCode = packageInfo.longVersionCodeCompat
             if (manifest == null || manifest.info.versionCode <= installedVersionCode) {
                 Column(horizontalAlignment = Alignment.End) {
                     Text("${packageInfo.versionName}-${installedVersionCode}")
@@ -165,7 +158,6 @@ private fun AppsListItem(model: PackageModel, onInstall: () -> Unit) {
                 )
             }
         }
-
     }) else ({
         TextButton(onClick = onInstall) {
             Text("Install")

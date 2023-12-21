@@ -16,19 +16,29 @@ class InstallReceiver : BroadcastReceiver() {
         val sessionId = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
         val packageName = intent.getStringExtra(PackageInstaller.EXTRA_PACKAGE_NAME)
 
-        logcat { "Got status $status, packageName=$packageName" }
+        logcat { "Got status $status, packageName=$packageName, sessionId=$sessionId" }
 
         when (status) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                val activityIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                val application = context.applicationContext as LunaApplication
+                if (application.isInBackground) {
+                    PendingAppInstalls.notifyFailed(
+                        sessionId,
+                        PackageInstaller.STATUS_PENDING_USER_ACTION,
+                        "User action required, but app is in background"
+                    )
                 } else {
-                    @Suppress("DEPRECATION")
-                    intent.getParcelableExtra(Intent.EXTRA_INTENT)
-                }
+                    val activityIntent =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra(Intent.EXTRA_INTENT)
+                        }
 
-                if (activityIntent != null) {
-                    context.startActivity(activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    if (activityIntent != null) {
+                        context.startActivity(activityIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
                 }
             }
 

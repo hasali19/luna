@@ -3,7 +3,6 @@ package dev.hasali.luna
 import android.app.Application
 import android.content.pm.PackageInfo
 import android.graphics.drawable.Drawable
-import android.os.Build
 import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -73,12 +72,7 @@ class AppsListViewModel(
             manifests
                 .filter {
                     val packageInfo = packageInfos[it.key] ?: return@filter false
-                    val installedVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        packageInfo.longVersionCode
-                    } else {
-                        @Suppress("DEPRECATION")
-                        packageInfo.versionCode.toLong()
-                    }
+                    val installedVersionCode = packageInfo.longVersionCodeCompat
                     installedVersionCode < it.value.info.versionCode
                 }
                 .toMap()

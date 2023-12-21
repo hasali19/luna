@@ -12,6 +12,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import dev.hasali.luna.data.LunaDatabase
 import dev.hasali.luna.ui.theme.LunaTheme
 import io.ktor.client.HttpClient
@@ -24,11 +29,26 @@ import io.ktor.serialization.kotlinx.serialization
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import logcat.logcat
+import java.time.Duration
 
 @OptIn(ExperimentalSerializationApi::class)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        WorkManager.getInstance(applicationContext)
+            .enqueueUniquePeriodicWork(
+                "background_updates_check",
+                ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<BackgroundUpdatesWorker>(Duration.ofHours(1))
+                    .setConstraints(
+                        Constraints.Builder()
+                            .setRequiredNetworkType(NetworkType.UNMETERED)
+                            .setRequiresBatteryNotLow(true)
+                            .build()
+                    )
+                    .build()
+            )
 
         val client = HttpClient {
             install(ContentNegotiation) {

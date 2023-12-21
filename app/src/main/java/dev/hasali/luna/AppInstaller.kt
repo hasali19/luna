@@ -22,7 +22,7 @@ class AppInstaller(private val context: Context) {
 
     suspend fun install(
         manifest: AppManifest,
-        onProgress: (Float) -> Unit
+        onProgress: (Float) -> Unit = {}
     ): InstallationResult {
         val packages = manifest.packages.associateBy { it.abi ?: "any" }
         val abi = Build.SUPPORTED_ABIS.find { packages.containsKey(it) } ?: "any"
