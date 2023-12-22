@@ -1,7 +1,14 @@
 package dev.hasali.luna
 
+import android.Manifest
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.pm.PackageManager.NameNotFoundException
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import dev.hasali.luna.data.LunaDatabase
@@ -67,7 +74,45 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
             )
 
             if (manifest.info.versionCode > info.longVersionCodeCompat) {
-                AppInstaller(applicationContext).install(manifest)
+                val result = AppInstaller(applicationContext).install(manifest)
+                val displayVersion = "${manifest.info.version}+${manifest.info.versionCode}"
+                val message = when (result) {
+                    is AppInstaller.InstallationResult.Failure -> "Failed to update to $displayVersion"
+                    AppInstaller.InstallationResult.NoCompatiblePackage -> "No compatible package found for version $displayVersion"
+                    AppInstaller.InstallationResult.Success -> "App was updated to $displayVersion"
+                    AppInstaller.InstallationResult.UserCanceled -> continue
+                }
+
+                val intent = Intent(applicationContext, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
+
+                val pendingIntent = PendingIntent.getActivity(
+                    applicationContext,
+                    0,
+                    intent,
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val notification =
+                    NotificationCompat.Builder(applicationContext, NotificationChannels.APP_UPDATES)
+                        .setContentTitle(manifest.info.name)
+                        .setContentText(message)
+                        .setSmallIcon(R.drawable.ic_notification_small)
+                        .setPriority(NotificationCompat.PRIORITY_LOW)
+                        .setContentIntent(pendingIntent)
+                        .setAutoCancel(true)
+                        .build()
+
+                with(NotificationManagerCompat.from(applicationContext)) {
+                    if (ContextCompat.checkSelfPermission(
+                            applicationContext,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notify(pkg.id, notification)
+                    }
+                }
             }
         }
 
