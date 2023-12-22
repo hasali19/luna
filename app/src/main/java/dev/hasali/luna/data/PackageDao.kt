@@ -14,5 +14,8 @@ interface PackageDao {
     fun getByPackageName(packageName: String): Flow<Package>
 
     @Insert
-    suspend fun insert(pgk: Package)
+    suspend fun insert(pkg: Package)
+
+    @Query("UPDATE Package SET latestVersionName = :versionName, latestVersionCode = :versionCode WHERE packageName = :packageName")
+    suspend fun updateLatestVersion(packageName: String, versionName: String, versionCode: Long)
 }

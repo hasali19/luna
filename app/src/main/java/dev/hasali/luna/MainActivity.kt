@@ -93,8 +93,6 @@ class MainActivity : ComponentActivity() {
                             db = db,
                         )
                     },
-                    // client = client,
-                    // db = db,
                     onSearchApps = { navController.navigate("add_app") },
                 )
             }

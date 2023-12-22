@@ -11,4 +11,6 @@ data class Package(
     val label: String,
     val packageName: String,
     val manifestUrl: String,
+    val latestVersionName: String?,
+    val latestVersionCode: Long?,
 )

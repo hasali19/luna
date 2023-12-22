@@ -60,6 +60,12 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
                 continue
             }
 
+            db.packageDao().updateLatestVersion(
+                manifest.info.packageName,
+                manifest.info.version,
+                manifest.info.versionCode,
+            )
+
             if (manifest.info.versionCode > info.longVersionCodeCompat) {
                 AppInstaller(applicationContext).install(manifest)
             }

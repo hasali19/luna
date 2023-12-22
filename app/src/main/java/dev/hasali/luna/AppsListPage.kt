@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -31,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
@@ -44,7 +46,7 @@ fun AppsListPage(
     onSearchApps: () -> Unit,
 ) {
     val packages by viewModel.packages.collectAsState(initial = null)
-    val availableUpdates by viewModel.updatedManifests.collectAsState(initial = null)
+    val updatablePackages by viewModel.updatablePackages.collectAsState(initial = null)
 
     Scaffold(topBar = { TopAppBar(title = { Text("Apps") }) }, floatingActionButton = {
         FloatingActionButton(onClick = onSearchApps) {
@@ -61,10 +63,23 @@ fun AppsListPage(
                     if (packages == null) {
                         CircularProgressIndicator()
                     } else {
-                        if (packages.isEmpty()) {
-                            Text("No apps installed", modifier = Modifier.align(Alignment.Center))
-                        } else {
-                            LazyColumn {
+                        LazyColumn {
+                            item {
+                                LunaStatusCard(
+                                    lunaPackage = viewModel.lunaPackage,
+                                    onUpdate = viewModel::updateLuna,
+                                )
+                            }
+
+                            if (packages.isEmpty()) {
+                                item {
+                                    Text(
+                                        text = "No apps installed",
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                            } else {
                                 item {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -73,7 +88,7 @@ fun AppsListPage(
                                             .padding(horizontal = 16.dp),
                                     ) {
                                         Text("Installed", modifier = Modifier.weight(1f))
-                                        if (availableUpdates == null || availableUpdates!!.isEmpty()) {
+                                        if (updatablePackages == null || updatablePackages!!.isEmpty()) {
                                             Button(
                                                 enabled = !viewModel.isCheckingForUpdates,
                                                 onClick = viewModel::checkForUpdates,
@@ -93,7 +108,7 @@ fun AppsListPage(
                                                 enabled = !viewModel.isUpdating,
                                                 onClick = viewModel::updateAll,
                                             ) {
-                                                Text("Update all (${availableUpdates!!.size})")
+                                                Text("Update all (${updatablePackages!!.size})")
                                                 if (viewModel.isUpdating) {
                                                     Spacer(modifier = Modifier.width(8.dp))
                                                     CircularProgressIndicator(
@@ -123,6 +138,43 @@ fun AppsListPage(
 }
 
 @Composable
+private fun LunaStatusCard(lunaPackage: LunaPackageState, onUpdate: () -> Unit) {
+    ElevatedCard(modifier = Modifier.padding(16.dp)) {
+        val trailingContent: @Composable () -> Unit = if (lunaPackage.isUpdating) ({
+            val updateProgress = lunaPackage.updateProgress.value
+            if (updateProgress == null) {
+                CircularProgressIndicator()
+            } else {
+                CircularProgressIndicator(
+                    updateProgress
+                )
+            }
+        }) else if (lunaPackage.isUpdateAvailable) ({
+            TextButton(onClick = onUpdate) {
+                Text("Update")
+            }
+        }) else ({
+            Text("${lunaPackage.installedVersionName}-${lunaPackage.installedVersionCode}")
+        })
+
+        Column {
+            ListItem(
+                headlineContent = { Text(lunaPackage.name) },
+                supportingContent = { Text(lunaPackage.packageName) },
+                leadingContent = {
+                    AsyncImage(
+                        model = lunaPackage.icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp)
+                    )
+                },
+                trailingContent = trailingContent,
+            )
+        }
+    }
+}
+
+@Composable
 private fun AppsListItem(model: PackageModel, onInstall: () -> Unit) {
     val packageInfo = model.info
 
@@ -143,20 +195,20 @@ private fun AppsListItem(model: PackageModel, onInstall: () -> Unit) {
     }
 
     val trailingContent: @Composable () -> Unit = if (packageInfo != null) ({
-        model.manifest.let { manifest ->
-            val installedVersionCode = packageInfo.longVersionCodeCompat
-            if (manifest == null || manifest.info.versionCode <= installedVersionCode) {
-                Column(horizontalAlignment = Alignment.End) {
-                    Text("${packageInfo.versionName}-${installedVersionCode}")
-                    Text(DateFormat.getDateInstance().format(Date(packageInfo.lastUpdateTime)))
-                }
-            } else {
-                Text(
-                    text = "${packageInfo.versionName}-${installedVersionCode} ~ ${manifest.info.version}-${manifest.info.versionCode}",
-                    fontStyle = FontStyle.Italic,
-                    textDecoration = TextDecoration.Underline,
-                )
+        val installedVersionCode = packageInfo.longVersionCodeCompat
+        val latestVersionName = model.pkg.latestVersionName ?: "0.0.0"
+        val latestVersionCode = model.pkg.latestVersionCode ?: -1
+        if (latestVersionCode <= installedVersionCode) {
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${packageInfo.versionName}-$installedVersionCode")
+                Text(DateFormat.getDateInstance().format(Date(packageInfo.lastUpdateTime)))
             }
+        } else {
+            Text(
+                text = "${packageInfo.versionName}-$installedVersionCode ~ $latestVersionName-$latestVersionCode",
+                fontStyle = FontStyle.Italic,
+                textDecoration = TextDecoration.Underline,
+            )
         }
     }) else ({
         TextButton(onClick = onInstall) {

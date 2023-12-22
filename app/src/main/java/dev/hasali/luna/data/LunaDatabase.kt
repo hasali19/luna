@@ -1,11 +1,18 @@
 package dev.hasali.luna.data
 
 import android.content.Context
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [Package::class], version = 1)
+@Database(
+    version = 2,
+    entities = [Package::class],
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2)
+    ],
+)
 abstract class LunaDatabase : RoomDatabase() {
     abstract fun packageDao(): PackageDao
 

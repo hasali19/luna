@@ -5,6 +5,7 @@ import android.content.pm.PackageInfo
 import android.graphics.drawable.Drawable
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -27,17 +28,22 @@ data class PackageModel(
     val pkg: Package,
     val info: PackageInfo?,
     val icon: Drawable?,
-    val manifest: AppManifest?,
 )
 
-private val DEFAULT_PACKAGES = listOf(
-    Package(
-        id = -1,
-        label = "Luna",
-        packageName = "dev.hasali.luna",
-        manifestUrl = "https://github.com/hasali19/luna/releases/download/latest/luna.apk.json",
-    ),
-)
+data class LunaPackageState(
+    val name: String,
+    val packageName: String,
+    val icon: Drawable,
+    val installedVersionName: String,
+    val installedVersionCode: Long,
+    val latestVersionName: String?,
+    val latestVersionCode: Long?,
+    val isUpdating: Boolean = false,
+    val updateProgress: MutableState<Float?> = mutableStateOf(null),
+) {
+    val isUpdateAvailable
+        get() = latestVersionCode != null && installedVersionCode < latestVersionCode
+}
 
 class AppsListViewModel(
     private val application: Application,
@@ -46,36 +52,34 @@ class AppsListViewModel(
 ) : AndroidViewModel(application) {
     private val _packages = MutableStateFlow<List<Package>?>(null)
     private val _packageInfos = MutableStateFlow<Map<String, PackageInfo>?>(null)
-    private val _manifests = MutableStateFlow<Map<String, AppManifest>?>(null)
+
+    var lunaPackage: LunaPackageState by mutableStateOf(getInitialLunaPackageState())
+        private set
 
     val packages = combine(
         _packages.filterNotNull(),
-        _packageInfos.filterNotNull(),
-        _manifests
-    ) { packages, packageInfos, manifests ->
+        _packageInfos.filterNotNull()
+    ) { packages, packageInfos ->
         packages.map {
             val info = packageInfos.get(it.packageName)
             PackageModel(
                 it,
                 info,
                 info?.applicationInfo?.loadIcon(application.packageManager),
-                manifests?.get(it.packageName),
             )
         }
     }
 
-    val updatedManifests
+    val updatablePackages
         get() = combine(
-            _manifests.filterNotNull(),
+            _packages.filterNotNull(),
             _packageInfos.filterNotNull()
-        ) { manifests, packageInfos ->
-            manifests
-                .filter {
-                    val packageInfo = packageInfos[it.key] ?: return@filter false
-                    val installedVersionCode = packageInfo.longVersionCodeCompat
-                    installedVersionCode < it.value.info.versionCode
-                }
-                .toMap()
+        ) { packages, packageInfos ->
+            packages.filter {
+                val packageInfo = packageInfos[it.packageName] ?: return@filter false
+                val installedVersionCode = packageInfo.longVersionCodeCompat
+                it.latestVersionCode != null && installedVersionCode < it.latestVersionCode
+            }
         }
 
     private var _isCheckingForUpdates by mutableStateOf(false)
@@ -88,20 +92,30 @@ class AppsListViewModel(
         viewModelScope.launch {
             launch {
                 db.packageDao().getAll().collect {
-                    _packages.value = DEFAULT_PACKAGES + it
+                    _packages.value = it
                 }
             }
 
             launch {
                 _packages.filterNotNull().collect { packages ->
-                    _updatePackageInfos(packages)
+                    updatePackageInfos(packages)
                 }
+            }
+
+            launch inner@{
+                val lunaManifest =
+                    getPackageManifest("https://github.com/hasali19/luna/releases/download/latest/luna.apk.json")
+                        ?: return@inner
+                lunaPackage = lunaPackage.copy(
+                    latestVersionName = lunaManifest.info.version,
+                    latestVersionCode = lunaManifest.info.versionCode,
+                )
             }
         }
     }
 
     fun refreshInstallStatuses() {
-        _packages.value?.let { packages -> _updatePackageInfos(packages) }
+        _packages.value?.let { packages -> updatePackageInfos(packages) }
     }
 
     fun checkForUpdates() {
@@ -110,26 +124,46 @@ class AppsListViewModel(
             val packageInfos = _packageInfos.value
             val packages =
                 _packages.value?.filter { packageInfos?.containsKey(it.packageName) ?: false }
+                    ?: return@launch
 
-            _manifests.value = packages!!
-                .mapNotNull { pkg ->
-                    val res = client.get(pkg.manifestUrl)
-                    if (res.status.isSuccess()) {
-                        res.body<AppManifest>()
-                    } else {
-                        null
-                    }
+            packages
+                .mapNotNull { pkg -> getPackageManifest(pkg.manifestUrl) }
+                .forEach { manifest ->
+                    db.packageDao().updateLatestVersion(
+                        manifest.info.packageName,
+                        manifest.info.version,
+                        manifest.info.versionCode,
+                    )
                 }
-                .associateBy { it.info.packageName }
 
             _isCheckingForUpdates = false
+        }
+    }
+
+    fun updateLuna() {
+        lunaPackage = lunaPackage.copy(isUpdating = true, updateProgress = mutableStateOf(null))
+        viewModelScope.launch {
+            val manifest =
+                getPackageManifest("https://github.com/hasali19/luna/releases/download/latest/luna.apk.json")
+                    ?: return@launch
+
+            val result = AppInstaller(application).install(manifest) {
+                lunaPackage.updateProgress.value = it
+            }
+
+            if (result != AppInstaller.InstallationResult.Success) {
+                Toast.makeText(application, "Failed to update Luna", Toast.LENGTH_SHORT).show()
+            }
+
+            lunaPackage = lunaPackage.copy(isUpdating = false)
         }
     }
 
     fun updateAll() {
         _isUpdating = true
         viewModelScope.launch {
-            for ((_, manifest) in updatedManifests.first()) {
+            for (pkg in updatablePackages.first()) {
+                val manifest = getPackageManifest(pkg.manifestUrl) ?: continue
                 when (val result = AppInstaller(application).install(manifest) {}) {
                     is AppInstaller.InstallationResult.Success -> {
                         Toast.makeText(
@@ -201,7 +235,20 @@ class AppsListViewModel(
         }
     }
 
-    private fun _updatePackageInfos(packages: List<Package>) {
+    private fun getInitialLunaPackageState(): LunaPackageState {
+        val packageInfo = application.packageManager.getPackageInfo("dev.hasali.luna", 0)
+        return LunaPackageState(
+            name = "Luna",
+            packageName = "dev.hasali.luna",
+            icon = application.packageManager.getApplicationIcon("dev.hasali.luna"),
+            installedVersionName = packageInfo.versionName,
+            installedVersionCode = packageInfo.longVersionCodeCompat,
+            latestVersionName = null,
+            latestVersionCode = null,
+        )
+    }
+
+    private fun updatePackageInfos(packages: List<Package>) {
         _packageInfos.value = packages
             .map {
                 runCatching {
@@ -210,5 +257,14 @@ class AppsListViewModel(
             }
             .mapNotNull { it.getOrNull() }
             .associateBy { it.packageName }
+    }
+
+    private suspend fun getPackageManifest(url: String): AppManifest? {
+        val res = client.get(url)
+        return if (res.status.isSuccess()) {
+            res.body<AppManifest>()
+        } else {
+            null
+        }
     }
 }
