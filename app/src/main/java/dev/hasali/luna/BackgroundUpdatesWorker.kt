@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.NameNotFoundException
 import androidx.core.app.NotificationCompat
@@ -30,11 +31,15 @@ import logcat.logcat
 @OptIn(ExperimentalSerializationApi::class)
 class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
     CoroutineWorker(context, params) {
+
+    private lateinit var client: HttpClient
+    private lateinit var db: LunaDatabase
+    private lateinit var installer: AppInstaller
+
     override suspend fun doWork(): Result {
         logcat { "Starting background updates worker" }
 
-        val db = LunaDatabase.open(applicationContext)
-        val client = HttpClient {
+        client = HttpClient {
             install(ContentNegotiation) {
                 json(Json {
                     ignoreUnknownKeys = true
@@ -52,6 +57,39 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
             }
         }
 
+        db = LunaDatabase.open(applicationContext)
+        installer = AppInstaller(applicationContext)
+
+        if (applicationContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            updateSelf()
+        }
+
+        updateInstalledPackages()
+
+        return Result.success()
+    }
+
+    private suspend fun updateSelf() {
+        val info = try {
+            applicationContext.packageManager.getPackageInfo("dev.hasali.luna", 0)
+        } catch (e: NameNotFoundException) {
+            return
+        }
+
+        val res =
+            client.get("https://github.com/hasali19/luna/releases/download/latest/luna.apk.json")
+        val manifest = if (res.status.isSuccess()) {
+            res.body<AppManifest>()
+        } else {
+            return
+        }
+
+        if (manifest.info.versionCode > info.longVersionCodeCompat) {
+            installer.install(manifest)
+        }
+    }
+
+    private suspend fun updateInstalledPackages() {
         val packages = db.packageDao().getAll().first()
         for (pkg in packages) {
             val info = try {
@@ -74,11 +112,10 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
             )
 
             if (manifest.info.versionCode > info.longVersionCodeCompat) {
-                val installer = AppInstaller(applicationContext)
                 if (!installer.shouldSilentlyUpdatePackage(manifest.info.packageName)) {
                     continue
                 }
-                
+
                 val result = installer.install(manifest)
                 val displayVersion = "${manifest.info.version}+${manifest.info.versionCode}"
                 val message = when (result) {
@@ -120,7 +157,5 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
                 }
             }
         }
-
-        return Result.success()
     }
 }
