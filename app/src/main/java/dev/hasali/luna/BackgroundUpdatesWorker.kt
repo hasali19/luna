@@ -60,7 +60,7 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
         db = LunaDatabase.open(applicationContext)
         installer = AppInstaller(applicationContext)
 
-        if (applicationContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+        if (applicationContext.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) {
             updateSelf()
         }
 
