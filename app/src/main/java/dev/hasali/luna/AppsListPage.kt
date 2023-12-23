@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
@@ -43,14 +43,14 @@ import java.util.Date
 @Composable
 fun AppsListPage(
     viewModel: AppsListViewModel,
-    onSearchApps: () -> Unit,
+    onAddApp: () -> Unit,
 ) {
     val packages by viewModel.packages.collectAsState(initial = null)
     val updatablePackages by viewModel.updatablePackages.collectAsState(initial = null)
 
     Scaffold(topBar = { TopAppBar(title = { Text("Apps") }) }, floatingActionButton = {
-        FloatingActionButton(onClick = onSearchApps) {
-            Icon(Icons.Default.Search, contentDescription = null)
+        FloatingActionButton(onClick = onAddApp) {
+            Icon(Icons.Default.Add, contentDescription = null)
         }
     }) { padding ->
         Surface {

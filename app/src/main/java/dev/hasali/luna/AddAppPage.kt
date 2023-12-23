@@ -26,10 +26,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,7 +81,7 @@ fun AddAppPage(client: HttpClient, db: LunaDatabase) {
                 var manifest: AppManifest? by remember { mutableStateOf(null) }
 
                 Column {
-                    TextField(
+                    OutlinedTextField(
                         modifier = Modifier.fillMaxWidth(),
                         value = manifestUrl,
                         placeholder = { Text("Manifest url") },

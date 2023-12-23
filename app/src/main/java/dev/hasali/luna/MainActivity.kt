@@ -121,7 +121,7 @@ class MainActivity : ComponentActivity() {
                             db = db,
                         )
                     },
-                    onSearchApps = { navController.navigate("add_app") },
+                    onAddApp = { navController.navigate("add_app") },
                 )
             }
 
