@@ -6,10 +6,13 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asExecutor
 import kotlinx.coroutines.withContext
 import logcat.logcat
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 class AppInstaller(private val context: Context) {
 
@@ -18,6 +21,28 @@ class AppInstaller(private val context: Context) {
         data object NoCompatiblePackage : InstallationResult
         data object UserCanceled : InstallationResult
         data class Failure(val message: String?) : InstallationResult
+    }
+
+    suspend fun shouldSilentlyUpdatePackage(packageName: String): Boolean {
+        val packageInstaller = context.packageManager.packageInstaller
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val constraints = PackageInstaller.InstallConstraints.GENTLE_UPDATE
+            val executor = Dispatchers.Unconfined.asExecutor()
+            val result =
+                suspendCoroutine<PackageInstaller.InstallConstraintsResult> { continuation ->
+                    packageInstaller.checkInstallConstraints(
+                        listOf(packageName),
+                        constraints,
+                        executor
+                    ) {
+                        continuation.resume(it)
+                    }
+                }
+            result.areAllConstraintsSatisfied()
+        } else {
+            // TODO: Figure out a way to detect if the app is currently in use, below Android 14
+            return true
+        }
     }
 
     suspend fun install(

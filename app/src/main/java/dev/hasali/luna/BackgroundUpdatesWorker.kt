@@ -74,7 +74,12 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
             )
 
             if (manifest.info.versionCode > info.longVersionCodeCompat) {
-                val result = AppInstaller(applicationContext).install(manifest)
+                val installer = AppInstaller(applicationContext)
+                if (!installer.shouldSilentlyUpdatePackage(manifest.info.packageName)) {
+                    continue
+                }
+                
+                val result = installer.install(manifest)
                 val displayVersion = "${manifest.info.version}+${manifest.info.versionCode}"
                 val message = when (result) {
                     is AppInstaller.InstallationResult.Failure -> "Failed to update to $displayVersion"
