@@ -1,5 +1,6 @@
 package dev.hasali.luna
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -171,9 +172,12 @@ class InAppUpdateActivity : ComponentActivity() {
                                 TextButton(
                                     enabled = isActionsEnabled,
                                     onClick = {
-                                        startActivity(
+                                        val intent =
                                             packageManager.getLaunchIntentForPackage(packageName)
-                                        )
+                                                ?.apply { addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT) }
+                                        if (intent != null) {
+                                            startActivity(intent)
+                                        }
                                         finish()
                                     },
                                 ) {
