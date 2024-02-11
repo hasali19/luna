@@ -91,7 +91,7 @@ class InAppUpdateActivity : ComponentActivity() {
 
         var isInstalling by mutableStateOf(false)
         var progress by mutableStateOf<AppInstaller.InstallationProgress?>(null)
-        var isInstalled by mutableStateOf(false)
+        var installResult by mutableStateOf<AppInstaller.InstallationResult?>(null)
 
         setContent {
             val scope = rememberCoroutineScope()
@@ -124,8 +124,26 @@ class InAppUpdateActivity : ComponentActivity() {
                             if (manifest == null) {
                                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                             } else {
-                                if (isInstalled) {
-                                    Text("${manifest!!.info.name} was successfully updated")
+                                if (installResult != null) {
+                                    installResult!!.let { installResult ->
+                                        when (installResult) {
+                                            is AppInstaller.InstallationResult.Failure -> {
+                                                Text(installResult.message ?: "Update failed")
+                                            }
+
+                                            AppInstaller.InstallationResult.NoCompatiblePackage -> {
+                                                Text("No compatible package found for this device")
+                                            }
+
+                                            AppInstaller.InstallationResult.Success -> {
+                                                Text("${manifest!!.info.name} was successfully updated")
+                                            }
+
+                                            AppInstaller.InstallationResult.UserCanceled -> {
+                                                Text("Update was canceled")
+                                            }
+                                        }
+                                    }
                                 } else if (isInstalling) {
                                     progress.let { progress ->
                                         when (progress) {
@@ -162,13 +180,13 @@ class InAppUpdateActivity : ComponentActivity() {
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             val isActionsEnabled =
-                                manifest != null && (!isInstalling || isInstalled)
+                                manifest != null && (!isInstalling || installResult != null)
 
                             TextButton(enabled = isActionsEnabled, onClick = { finish() }) {
                                 Text("Cancel")
                             }
 
-                            if (isInstalled) {
+                            if (installResult != null) {
                                 TextButton(
                                     enabled = isActionsEnabled,
                                     onClick = {
@@ -189,10 +207,9 @@ class InAppUpdateActivity : ComponentActivity() {
                                     onClick = {
                                         isInstalling = true
                                         scope.launch {
-                                            installer.install(manifest!!) {
+                                            installResult = installer.install(manifest!!) {
                                                 progress = it
                                             }
-                                            isInstalled = true
                                         }
                                     },
                                 ) {
