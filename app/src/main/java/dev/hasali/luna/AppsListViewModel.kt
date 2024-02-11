@@ -148,7 +148,10 @@ class AppsListViewModel(
                     ?: return@launch
 
             val result = AppInstaller(application).install(manifest) {
-                lunaPackage.updateProgress.value = it
+                lunaPackage.updateProgress.value = when (it) {
+                    is AppInstaller.InstallationProgress.Downloading -> it.value
+                    AppInstaller.InstallationProgress.Installing -> 1f
+                }
             }
 
             if (result != AppInstaller.InstallationResult.Success) {

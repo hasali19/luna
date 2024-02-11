@@ -161,7 +161,10 @@ fun AddAppPage(client: HttpClient, db: LunaDatabase) {
                                     )
 
                                     val result = AppInstaller(context).install(manifest) {
-                                        progress = it
+                                        progress = when (it) {
+                                            is AppInstaller.InstallationProgress.Downloading -> it.value
+                                            AppInstaller.InstallationProgress.Installing -> 1f
+                                        }
                                     }
 
                                     if (result is AppInstaller.InstallationResult.NoCompatiblePackage) {

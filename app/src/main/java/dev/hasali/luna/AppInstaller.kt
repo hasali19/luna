@@ -16,6 +16,11 @@ import kotlin.coroutines.suspendCoroutine
 
 class AppInstaller(private val context: Context) {
 
+    sealed interface InstallationProgress {
+        data class Downloading(val value: Float) : InstallationProgress
+        data object Installing : InstallationProgress
+    }
+
     sealed interface InstallationResult {
         data object Success : InstallationResult
         data object NoCompatiblePackage : InstallationResult
@@ -47,7 +52,7 @@ class AppInstaller(private val context: Context) {
 
     suspend fun install(
         manifest: AppManifest,
-        onProgress: (Float) -> Unit = {}
+        onProgress: (InstallationProgress) -> Unit = {}
     ): InstallationResult {
         val packages = manifest.packages.associateBy { it.abi ?: "any" }
         val abi = Build.SUPPORTED_ABIS.find { packages.containsKey(it) } ?: "any"
@@ -58,7 +63,7 @@ class AppInstaller(private val context: Context) {
     private suspend fun install(
         name: String,
         url: String,
-        onProgress: (Float) -> Unit
+        onProgress: (InstallationProgress) -> Unit
     ): InstallationResult {
         logcat { "Beginning download of '$name' from '$url'" }
 
@@ -89,9 +94,11 @@ class AppInstaller(private val context: Context) {
                     output.write(buffer, 0, read)
                     totalBytesRead += read
                     onProgress(
-                        totalBytesRead.toFloat() / maxOf(
-                            totalBytesRead.toFloat(),
-                            size.toFloat()
+                        InstallationProgress.Downloading(
+                            totalBytesRead.toFloat() / maxOf(
+                                totalBytesRead.toFloat(),
+                                size.toFloat()
+                            )
                         )
                     )
                 }
@@ -99,6 +106,8 @@ class AppInstaller(private val context: Context) {
                 logcat { "Finished downloading '$name'" }
             }
         }
+
+        onProgress(InstallationProgress.Installing)
 
         logcat { "Starting install for '$name'" }
 

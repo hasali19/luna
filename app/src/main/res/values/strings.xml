@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Luna</string>
+    <string name="title_activity_in_app_update">InAppUpdateActivity</string>
 </resources>
