@@ -23,6 +23,8 @@
         tools:targetApi="31">
         <activity
             android:name=".InAppUpdateActivity"
+            android:allowTaskReparenting="true"
+            android:excludeFromRecents="true"
             android:exported="true"
             android:label="@string/title_activity_in_app_update"
             android:theme="@style/Theme.Luna.Dialog" />
