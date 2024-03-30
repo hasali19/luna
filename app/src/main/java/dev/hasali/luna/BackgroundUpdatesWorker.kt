@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import logcat.logcat
+import timber.log.Timber
 
 @OptIn(ExperimentalSerializationApi::class)
 class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
@@ -37,7 +38,7 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
     private lateinit var installer: AppInstaller
 
     override suspend fun doWork(): Result {
-        logcat { "Starting background updates worker" }
+        Timber.i("Starting background updates worker")
 
         client = HttpClient {
             install(ContentNegotiation) {
@@ -85,6 +86,7 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
         }
 
         if (manifest.info.versionCode > info.longVersionCodeCompat) {
+            Timber.i("Updating luna to ${manifest.info.version}+${manifest.info.versionCode}")
             installer.install(manifest)
         }
     }
@@ -113,8 +115,11 @@ class BackgroundUpdatesWorker(context: Context, params: WorkerParameters) :
 
             if (manifest.info.versionCode > info.longVersionCodeCompat) {
                 if (!installer.shouldSilentlyUpdatePackage(manifest.info.packageName)) {
+                    Timber.i("Skipping background update for ${manifest.info.packageName}")
                     continue
                 }
+
+                Timber.i("Updating ${manifest.info.packageName} to ${manifest.info.version}+${manifest.info.versionCode}")
 
                 val result = installer.install(manifest)
                 val displayVersion = "${manifest.info.version}+${manifest.info.versionCode}"
