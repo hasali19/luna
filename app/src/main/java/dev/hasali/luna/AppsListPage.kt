@@ -1,5 +1,6 @@
 package dev.hasali.luna
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,12 +14,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Scaffold
@@ -29,15 +34,22 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import coil.compose.AsyncImage
+import java.io.File
 import java.text.DateFormat
 import java.util.Date
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,11 +60,59 @@ fun AppsListPage(
     val packages by viewModel.packages.collectAsState(initial = null)
     val updatablePackages by viewModel.updatablePackages.collectAsState(initial = null)
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Apps") }) }, floatingActionButton = {
-        FloatingActionButton(onClick = onAddApp) {
-            Icon(Icons.Default.Add, contentDescription = null)
-        }
-    }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Apps") },
+                actions = {
+                    val context = LocalContext.current
+                    var expanded by remember { mutableStateOf(false) }
+
+                    IconButton(onClick = {
+                        expanded = true
+                    }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More")
+                    }
+
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Logs") },
+                            onClick = {
+                                val logsDir = File(context.cacheDir, "logs")
+                                val logFiles = logsDir.listFiles() ?: emptyArray()
+                                val latestLog = logFiles.maxByOrNull { it.lastModified() }
+
+                                if (latestLog != null) {
+                                    val uri =
+                                        FileProvider.getUriForFile(
+                                            context,
+                                            "dev.hasali.luna.fileprovider",
+                                            latestLog
+                                        )
+
+                                    val intent = Intent()
+                                    intent.setAction(Intent.ACTION_VIEW)
+                                    intent.setFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    intent.setDataAndType(uri, "text/plain")
+
+                                    context.startActivity(intent)
+                                }
+
+                                expanded = false
+                            },
+                        )
+                    }
+                },
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onAddApp) {
+                Icon(Icons.Default.Add, contentDescription = null)
+            }
+        }) { padding ->
         Surface {
             Box(
                 modifier = Modifier
